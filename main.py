@@ -7,6 +7,8 @@ from torch.autograd import Variable
 import torchvision.transforms as transforms
 import torchvision
 import os
+import PIL.Image as pil_image
+import numpy as np
 from senet import ressenet50
 import argparse
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 SENet')
@@ -15,10 +17,18 @@ args = parser.parse_args()
 
 use_cuda = torch.cuda.is_available()
 best_acc = 0
-
+class RandomRotate(object):
+    def __init__(self, max_ang):
+        assert max_ang > 0
+        self.max_ang = max_ang
+    def __call__(self, x, mode="reflect"):
+        angle = np.random.randint(-self.max_ang, self.max_ang)
+        x = x.rotate(angle)
+        return x
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
+    RandomRotate(10),
     transforms.ToTensor(),
 ])
 
@@ -77,7 +87,7 @@ def test(epoch):
         test_loss += loss.data[0]
         _, predicted = torch.max(y_preds.data, 1)
         total += y_batch.size(0)
-        correct += predicted.eq(y_preds.data).cpu().sum()
+        correct += predicted.eq(y_batch.data).cpu().sum()
 
         print(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (test_loss / (batch_idx + 1), 100. * correct / total, correct, total))
@@ -86,7 +96,7 @@ def test(epoch):
     if acc > best_acc:
         print('Saving..')
         state = {
-            'net': model.module if use_cuda else model,
+            'net': model._modules if use_cuda else model,
             'acc': acc,
             'epoch': epoch,
         }
@@ -97,5 +107,5 @@ def test(epoch):
 if __name__ == "__main__":
     for epoch in xrange(200):
         train(epoch)
-
-
+        test(epoch)
+        scheduler.step(epoch)
